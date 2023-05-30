@@ -1,4 +1,3 @@
-# import Library
 from pettingzoo.classic import connect_four_v3
 import random
 import math
@@ -10,7 +9,7 @@ COLUMN_COUNT = 7
 PLAYER_NUMBER = 2
 AI_NUMBER = 1
 EMPTY = 0
-WINDOW_LENGTH = 4
+WINING_LEN = 4
 FOUR_SAME_COLOR_SCORE = 100
 THREE_SAME_COLOR_SCORE = 10
 TWO_SAME_COLOR_SCORE = 3
@@ -86,7 +85,6 @@ def check_end(game_matrix):
     return 0
 
 
-
 def first_empty_row(game_matrix, col):
     for row in range(ROW_COUNT-1,-1,-1):
         if game_matrix[row][col] == 0:
@@ -94,41 +92,45 @@ def first_empty_row(game_matrix, col):
 
 
 def has_won(game_matrix, agent):
-    # Check horizontal locations for win
-    for c in range(COLUMN_COUNT - 3):
-        for r in range(ROW_COUNT):
-            if game_matrix[r][c] == agent and game_matrix[r][c + 1] == agent and game_matrix[r][c + 2] == agent and game_matrix[r][
-                c + 3] == agent:
+
+    # Check horizontal for win
+    for r in range(ROW_COUNT):
+        row_array = [int(i) for i in list(game_matrix[r, :])]
+        for c in range(COLUMN_COUNT - 3):
+            window = row_array[c:c + WINING_LEN]
+            if window.count(agent) == 4:
                 return True
 
-    # Check vertical locations for win
+    # Check vertical for win
     for c in range(COLUMN_COUNT):
+        col_array = [int(i) for i in list(game_matrix[:, c])]
         for r in range(ROW_COUNT - 3):
-            if game_matrix[r][c] == agent and game_matrix[r + 1][c] == agent and game_matrix[r + 2][c] == agent and game_matrix[r + 3][
-                c] == agent:
+            window = col_array[r:r + WINING_LEN]
+            if window.count(agent) == 4:
                 return True
 
     # Check positively sloped diaganols
-    for c in range(COLUMN_COUNT - 3):
-        for r in range(ROW_COUNT - 3):
-            if game_matrix[r][c] == agent and game_matrix[r + 1][c + 1] == agent and game_matrix[r + 2][c + 2] == agent and game_matrix[r + 3][
-                c + 3] == agent:
+    for r in range(ROW_COUNT - 3):
+        for c in range(COLUMN_COUNT - 3):
+            window = [game_matrix[r + i][c + i] for i in range(WINING_LEN)]
+            if window.count(agent) == 4:
+                return True
+            
+    # Score negative sloped diagonal
+    for r in range(ROW_COUNT - 3):
+        for c in range(COLUMN_COUNT - 3):
+            window = [game_matrix[r + 3 - i][c + i] for i in range(WINING_LEN)]
+            if window.count(agent) == 4:
                 return True
 
-    # Check negatively sloped diaganols
-    for c in range(COLUMN_COUNT - 3):
-        for r in range(3, ROW_COUNT):
-            if game_matrix[r][c] == agent and game_matrix[r - 1][c + 1] == agent and game_matrix[r - 2][c + 2] == agent and game_matrix[r - 3][
-                c + 3] == agent:
-                return True
+    return False
 
 
-def evaluate_window(window, agent, mode = None):
+def window_score(window, agent, mode = None):
     score = 0
     opp_agent = PLAYER_NUMBER
     if agent == PLAYER_NUMBER:
         opp_agent = AI_NUMBER
-
 
     if window.count(agent) == 4:
         score +=  FOUR_SAME_COLOR_SCORE
@@ -139,6 +141,7 @@ def evaluate_window(window, agent, mode = None):
 
     if window.count(opp_agent) == 3 and window.count(EMPTY) == 1:
         if mode == "vertical":
+            # should have more effect because we can be sure all the place beneath are filled
             score-= THREE_SAME_COLOR_OPP_SCORE*2
         else: score -= THREE_SAME_COLOR_OPP_SCORE
 
@@ -147,56 +150,51 @@ def evaluate_window(window, agent, mode = None):
 
 def score_position(game_matrix, agent):
     score = 0
-
-    ## Score center column
-    center_array = [int(i) for i in list(game_matrix[:, COLUMN_COUNT // 2])]
+    # center column is a good move to take
     center_array =[]
     for i in range(5,-1,-1):
         center_array.append(game_matrix[i][COLUMN_COUNT // 2])
-    # center_count = center_array.count(0)
     center_count = center_array.count(agent)
-    score += center_count * 3
-    # if center_count >= 4 :
-    #     score += center_count * 3
-    # else :
-    #      center_count = center_array.count(agent)
-    #      score += center_count * 2
+    # the more agent piece is in center column, the more possible to prevent the opponent from wining
+    score += center_count * 4
 
-
-    ## Score Horizontal
+    # Horizontal score
     for r in range(ROW_COUNT):
         row_array = [int(i) for i in list(game_matrix[r, :])]
         for c in range(COLUMN_COUNT - 3):
             alpha = 1
-            window = row_array[c:c + WINDOW_LENGTH]
+            window = row_array[c:c + WINING_LEN]
+            # in horizontal wondow it is possible that the below row is not filled and you may need a piece to firts
+            # fill the row below so that you could place your piece
             if r<4 :
                 row_array2 = [int(i) for i in list(game_matrix[r+1, :])]
-                window2= row_array2[c:c + WINDOW_LENGTH]
-                score_window2 = evaluate_window(window2, agent)
+                window2= row_array2[c:c + WINING_LEN]
+                score_window2 = window_score(window2, agent)
                 if score_window2 == THREE_SAME_COLOR_SCORE:
                     alpha = 0.6
                 elif score_window2 == TWO_SAME_COLOR_SCORE:
                     alpha = 0.4
                 
-        score+= evaluate_window(window, agent)*alpha
+        score+= window_score(window, agent)*alpha
 
-    ## Score Vertical
+    # Vertical score
     for c in range(COLUMN_COUNT):
         col_array = [int(i) for i in list(game_matrix[:, c])]
         for r in range(ROW_COUNT - 3):
-            window = col_array[r:r + WINDOW_LENGTH]
-            score += evaluate_window(window, agent, "vertical")
+            window = col_array[r:r + WINING_LEN]
+            score += window_score(window, agent, "vertical")
 
-    ## Score posiive sloped diagonal
+    # positive sloped diagonal score
     for r in range(ROW_COUNT - 3):
         for c in range(COLUMN_COUNT - 3):
-            window = [game_matrix[r + i][c + i] for i in range(WINDOW_LENGTH)]
-            score += evaluate_window(window, agent)
+            window = [game_matrix[r + i][c + i] for i in range(WINING_LEN)]
+            score += window_score(window, agent)
 
+    # negative sloped diagonal score
     for r in range(ROW_COUNT - 3):
         for c in range(COLUMN_COUNT - 3):
-            window = [game_matrix[r + 3 - i][c + i] for i in range(WINDOW_LENGTH)]
-            score += evaluate_window(window, agent)
+            window = [game_matrix[r + 3 - i][c + i] for i in range(WINING_LEN)]
+            score += window_score(window, agent)
 
     return score
 
@@ -204,47 +202,113 @@ def score_position(game_matrix, agent):
 def valid_columns_to_drop(game_matrix):
     valid_cols = []
     for col in range(COLUMN_COUNT):
-        if game_matrix[0][col] == 0:
+        if game_matrix[0][col] == EMPTY:
             valid_cols.append(col)
     return valid_cols
 
+print("Choose what game you want to play:")
+print("1. AI AGENT with HUMAN")
+print("2. AI AGENT with AI AGENT")
+print("3. AI AGENT with RANDOM AGENT")
 
-for agent in env.agent_iter():
-    # if agent == 'player_1':
-    #     PLAYER_NUMBER = 1
-    #     AI_NUMBER = 2
-    # else:
-    #     PLAYER_NUMBER = 2
-    #     AI_NUMBER = 1
-    observation, reward, termination, truncation, info = env.last()
+game = int(input())
+while not (game == 1 or game == 2 or game ==3 ) :
+    print("Wrong entry, choose a valid number")
+    game = int(input())
 
-    if termination or truncation:
-        action = None
-        if reward == 1:
-            print("AI AGENT HAS WON")
-        elif reward == -1:
-            print("YOU WON")
-        else:
-            print("draw")
-        time.sleep(30)
-        env.reset()
-        break
+if game == 1 :
+    # AI WITH HUMAN
+    for agent in env.agent_iter():
+        # if agent == 'player_1':
+        #     PLAYER_NUMBER = 1
+        #     AI_NUMBER = 2
+        # else:
+        #     PLAYER_NUMBER = 2
+        #     AI_NUMBER = 1
+        observation, reward, termination, truncation, info = env.last()
 
-    else:
-        if agent == 'player_0':
-            game_matrix = generate_map(env)
-            col, minimax_score = minimax(game_matrix, 5, -math.inf, math.inf, True)
-            if game_matrix[0][col] == 0:
-                env.step(col)
-        else : 
-            col =  int(input())
-            if game_matrix[0][col] == 0:
-                env.step(col)
+        if termination or truncation:
+            action = None
+            if reward == 1:
+                print("AI AGENT HAS WON")
+            elif reward == -1:
+                print("YOU WON")
             else:
-                print("Invalid action!")
+                print("DRAW")
+            time.sleep(30)
+            env.reset()
+            break
 
+        else:
+            if agent == 'player_0':
+                game_matrix = generate_map(env)
+                col, minimax_score = minimax(game_matrix, 5, -math.inf, math.inf, True)
+                if game_matrix[0][col] == EMPTY:
+                    env.step(col)
+            else : 
+                col =  int(input())
+                if game_matrix[0][col] == EMPTY:
+                    env.step(col)
+                else:
+                    print("INVALID ACTION")
 
-env.close()
+    env.close()
+elif game == 2 :
+    # AI WITH AI
+    for agent in env.agent_iter():
+        if agent == 'player_1':
+            PLAYER_PIECE = 1
+            AI_PIECE = 2
+        else:
+            PLAYER_PIECE = 2
+            AI_PIECE = 1
+        observation, reward, termination, truncation, info = env.last()
 
+        if termination or truncation:
 
+            action = None
+            if reward == 1:
+                print("THE FIRST AGENT HAS WON")
+            elif reward == -1:
+                print("THE SECOND AGENT HAS WON")
+            else:
+                print("DRAW")
+            time.sleep(30)
+            env.reset()
+            break
+        else:
+            game_matrix = generate_map(env)
+            col, minimax_score = minimax(game_matrix, 6, -math.inf, math.inf, True)
+            if game_matrix[0][col] == EMPTY:
+                env.step(col)
 
+    env.close()
+
+elif game == 3 :
+    # AI WITH RANDOM
+
+    for agent in env.agent_iter():
+        observation, reward, termination, truncation, info = env.last()
+
+        if termination or truncation:
+            action = None
+            if reward == 1:
+                print("THE AI AGENT HAS WON")
+            elif reward == -1:
+                print("THE RANDOM AGENT HAS WON")
+            else:
+                print("DRAW")
+            time.sleep(30)
+            env.reset()
+            break
+        else:
+            if agent == 'player_0':
+                action = env.action_space(agent).sample()
+                env.step(action)
+            else : 
+                game_matrix = generate_map(env)
+                col, minimax_score = minimax(game_matrix, 5, -math.inf, math.inf, True)
+                if game_matrix[0][col] == EMPTY:
+                    env.step(col)
+
+    env.close()
